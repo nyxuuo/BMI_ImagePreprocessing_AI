@@ -1,0 +1,124 @@
+Source Code untuk prediksi BMI dengan image:
+
+#libary importing
+from google.colab import drive
+import os
+import tensorflow as tf
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import numpy as np
+from tensorflow.keras.preprocessing import image
+
+drive.mount ('/content/drive')
+dataset_directory = '/content/drive/MyDrive/AOL_AI_BMI'
+
+training_directory = os.path.join(dataset_directory, 'datatraining')
+testing_directory = os.path.join(dataset_directory, 'datatest')
+
+image_width, image_height = 250,250
+batch_size = 32
+
+# untuk training saat gambarnya diotakatik juga
+train_generator = ImageDataGenerator(
+    rescale=1./255,
+    shear_range=0.2,
+    zoom_range=0.2,
+    horizontal_flip=True
+
+)
+test_generator = ImageDataGenerator(rescale=1.0/255.0)
+
+#generate train data from drive
+train_datagenerator = train_generator.flow_from_directory(
+    training_directory,
+    target_size=(image_width, image_height),
+    batch_size=batch_size,
+    class_mode='categorical' #karena pake foto, klo pake numeric sparse
+)
+
+#generate test data from drive
+test_datagenerator = test_generator.flow_from_directory(
+    testing_directory,
+    target_size=(image_width, image_height),
+    batch_size=batch_size,
+    class_mode='categorical'
+)
+
+model = Sequential([
+    Conv2D(32, (3, 3), activation='relu', input_shape=(image_height, image_width, 3)),
+    MaxPooling2D(pool_size=(2, 2)),
+    Conv2D(64, (3, 3), activation='relu'),
+    MaxPooling2D(pool_size=(2, 2)),
+    Flatten(),
+    Dense(128, activation='relu'),
+    Dropout(0.5),
+    Dense(3, activation='softmax')  # 3 neurons for 3 classes
+])
+
+model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+model.summary()
+
+history = model.fit(
+    train_datagenerator,
+    steps_per_epoch=train_datagenerator.samples // batch_size,
+    epochs=10,
+    validation_data=test_datagenerator,
+    validation_steps=test_datagenerator.samples // batch_size
+)
+
+#debugging file yang gabisa dibuka atau crash
+import os
+from PIL import Image
+
+
+dataset_dir = training_directory 
+# iterate ke dataset
+for root, dirs, files in os.walk(dataset_dir):
+    for file in files:
+        file_path = os.path.join(root, file)
+        try:
+            # Attempt to open the image
+            img = Image.open(file_path)
+            img.verify()  # Verify if it's a valid image
+        except Exception as e:
+            print(f"Error with file: {file_path} -> {e}")
+
+
+# print loss dan akurasinya
+validation_loss, validation_accuracy = model.evaluate(test_datagenerator)
+print(f"Validation Loss: {validation_loss}")
+print(f"Validation Accuracy: {validation_accuracy * 100:.2f}%")
+
+
+#plotting & predicting
+image_path = '/content/drive/My Drive/AOL_AI_BMI/dataprediction/prediction2.jpg'
+
+img = mpimg.imread(image_path)
+imgplot = plt.imshow(img)
+plt.show()
+
+img = image.load_img(image_path, target_size=(image_width, image_height))
+img_array = image.img_to_array(img)
+img_array = np.expand_dims(img_array, axis=0)
+
+predictions = model.predict(img_array)
+predicted_class = np.argmax(predictions)
+
+class_labels = ['Normal', 'Overweight', 'Underweight']
+predicted_label = class_labels[predicted_class]
+
+print(f"Predicted Class: {predicted_label}")
+
+if predicted_label == 'Underweight':
+  print('bmi < 18.5')
+elif predicted_class == 'Normal':
+  print('bmi = 18.5 - 24.9')
+elif predicted_class == 'Overweight':
+  print('bmi > 25.0')
+else:
+  print('Obesity')
+
